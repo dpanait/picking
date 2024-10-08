@@ -1,0 +1,26 @@
+{
+  "sqltools.connections": [
+    {
+      "previewLimit": 50,
+      "driver": "SQLite",
+      "name": "Picking",
+      "database": "/home/dani/.cache/Google/AndroidStudio2022.2/device-explorer/Pixel 4 API 28/data/data/com.example.piking/app_flutter/db_picking"
+    },
+    {
+      "previewLimit": 50,
+      "driver": "SQLite",
+      "name": "sqlflite",
+      "database": "/home/dani/.cache/Google/AndroidStudio2022.2/device-explorer/Pixel 4 API 28/data/data/com.yubstore.piking/databases/data/data/app_database"
+    },
+    {
+      "previewLimit": 50,
+      "driver": "SQLite",
+      "name": "drift sqflite",
+      "database": "/home/dani/.cache/Google/AndroidStudio2022.2/device-explorer/Pixel 4 API 28/data/data/com.example.piking/app_flutter/picking.sqlite"
+    }
+  ],
+  "sqltools.useNodeRuntime": true,
+  "cmake.sourceDirectory": "/home/dani/Documentos/Flutter/piking/linux",
+  "dart.lineLength": 160,
+  "dart.flutterScreenshotPath": null
+}
