@@ -488,7 +488,7 @@ class LocationApi {
             msg: resultError['result']['error'],
             toastLength: Toast.LENGTH_SHORT,
             gravity: ToastGravity.CENTER,
-            timeInSecForIosWeb: 10, //
+            timeInSecForIosWeb: 30, //
             backgroundColor: const Color.fromARGB(255, 184, 183, 183),
             textColor: const Color.fromARGB(255, 250, 2, 2),
             fontSize: 16.0);
@@ -504,7 +504,7 @@ class LocationApi {
           msg: resultError['result']['error'],
           toastLength: Toast.LENGTH_SHORT,
           gravity: ToastGravity.CENTER,
-          timeInSecForIosWeb: 10, //
+          timeInSecForIosWeb: 30, //
           backgroundColor: const Color.fromARGB(255, 184, 183, 183),
           textColor: const Color.fromARGB(255, 250, 2, 2),
           fontSize: 16.0);

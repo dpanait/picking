@@ -253,25 +253,29 @@ class _$ProductDao extends ProductDao {
   }
 
   @override
-  Future<bool?> updateQuantityProcessed(
+  Future<bool> updateQuantityProcessed(
     int ordersProductsId,
     int quantityProcessed,
   ) async {
-    return _queryAdapter.query(
+    bool status = false;
+    await _queryAdapter.queryNoReturn(
         'UPDATE Product SET quantityProcessed = ?2 WHERE ordersProductsId = ?1',
-        mapper: (Map<String, Object?> row) => (row.values.first as int) != 0,
         arguments: [ordersProductsId, quantityProcessed]);
+    status = true;
+    return status;
   }
 
   @override
-  Future<bool?> updateProductsQuantity(
+  Future<bool> updateProductsQuantity(
     int ordersProductsId,
     int productsQuantity,
   ) async {
-    return _queryAdapter.query(
+    bool status = false;
+    await _queryAdapter.queryNoReturn(
         'UPDATE Product SET productsQuantity = ?2 WHERE ordersProductsId = ?1',
-        mapper: (Map<String, Object?> row) => (row.values.first as int) != 0,
         arguments: [ordersProductsId, productsQuantity]);
+    status = true;
+    return status;
   }
 
   @override

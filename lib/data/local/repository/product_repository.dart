@@ -11,9 +11,9 @@ abstract class ProductRepository {
 
   Future<void> insertProduct(Product product);
 
-  Future<bool> updateQuantityProcessed(int ordersProductsId, int quantityProcessed);
+  Future<bool?> updateQuantityProcessed(int ordersProductsId, int quantityProcessed);
 
-  Future<bool> updateProductsQuantity(int ordersProductsId, int productsQuantity);
+  Future<bool?> updateProductsQuantity(int ordersProductsId, int productsQuantity);
 
   Future<void> updatePicking(int ordersProductsId, int picking);
 

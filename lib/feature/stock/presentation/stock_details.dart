@@ -1,6 +1,7 @@
 
 import 'dart:convert';
 import 'dart:developer';
+import 'dart:io';
 
 import 'package:floor/floor.dart';
 import 'package:flutter/cupertino.dart';
@@ -9,6 +10,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
+import 'package:piking/feature/stock/presentation/actions/change_location.dart';
+import 'package:piking/feature/stock/presentation/actions/move_stock.dart';
+import 'package:piking/feature/stock/presentation/actions/shared.dart';
 import 'package:piking/injection_container.dart';
 import 'package:piking/presentation/shared/swipe_detector.dart';
 import 'package:piking/feature/stock/data/remote/model/product_location_model.dart';
@@ -46,6 +50,8 @@ class _StockDetailsState extends State<StockDetails> {
   bool isPopScope = false;
   bool multiEan = false;
   List<StoreEntity> stores = [];
+  StoreEntity selectedStore = StoreEntity.empty();
+  //repostorios
   var storeRepository = di.get<StoreRepository>();
   var productsLocationRepository = di.get<ProductsLocationRepository>();
 
@@ -63,20 +69,31 @@ class _StockDetailsState extends State<StockDetails> {
   }
   _loadStores() async {
     stores = await storeRepository.getStore();
+    selectedStore = stores.first;
   }
   _reloadTableProducts(int  productsId) async{
     ProductsLocationResponseEntity resultLocationEan = await productsLocationRepository.locationEan("", productsId);
     if (resultLocationEan.type != "") {
       LocationResponseEntity locationResponseEntity = resultLocationEan.locationResponse;
       if(locationResponseEntity.locationOrigin.productsLocations!.isNotEmpty){
-        setState(() {
-          productsLocationOrigin = locationResponseEntity.locationOrigin.productsLocations!;
-          productsLocationZero = locationResponseEntity.locationZero.locationZero;
-          locations = locationResponseEntity.locationOrigin.locations!;
-        });
+        if(mounted){
+          setState(() {
+            productsLocationOrigin = locationResponseEntity.locationOrigin.productsLocations!;
+            productsLocationZero = locationResponseEntity.locationZero.locationZero;
+            locations = locationResponseEntity.locationOrigin.locations!;
+          });
+        }
       }
 
     }
+  }
+  _navegateToWindow(
+    BuildContext context,
+    ProductsLocationEntity item,
+    List<LocationEntity> locations, 
+    List<ProductsLocationEntity> locatedElements
+    ) async {
+     
   }
 
   @override
@@ -226,59 +243,10 @@ class _StockDetailsState extends State<StockDetails> {
         
       });
 
-      for(ProductsLocationEntity item  in productsLocationZero){
-        // productos sin ubicar
-        //if (item.located! > 0) {
-          //isUnLocated = true;
-          String quantityUnLocated = (item.quantity! - item.located!).toString();
-
-          if(item.quantityMax! > 0){
-            quantityUnLocated += 'max ${item.quantityMax!} ud';
-          }
-
-          tableRowsUnLocated.add(
-            TableRow(children: [
-              Padding(
-                padding: const EdgeInsets.all(0.0),
-                child: TextButton(
-                  onPressed: () {
-                    // Action to perform when the button is pressed
-                    popUpLocationChange(context, item, locations);
-                  },
-                  child: Text('MOVER', style: TextStyle(fontSize: 12),),
-                )
-              ),
-              
-              Padding(
-                padding: const EdgeInsets.all(5.0),
-                child:  Align(
-                  alignment: Alignment.bottomCenter,
-                  heightFactor: 2,
-                  child: Text('$quantityUnLocated')
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(5.0),
-                child:  Align(
-                  alignment: Alignment.bottomCenter,
-                  heightFactor: 2,
-                  child: Tooltip(
-                    message: "${item.cajasAlias} ${item.cajasName}",
-                    showDuration: Duration(seconds: 5),
-                    child: Text(
-                      '${item.cajasAlias} ${item.cajasName}',
-                      overflow: TextOverflow.ellipsis
-                    ),
-                  )
-                ),
-              ),
-            ]),
-          );
-        //}
-      }
+      
       // location origin
       for( ProductsLocationEntity item in locatedElements){
-        log("Item: ${item.located}");
+        //log("Item: ${item.located}");
         // produtos con localizacion
         //if (item.located! >= 0) {
         
@@ -289,7 +257,7 @@ class _StockDetailsState extends State<StockDetails> {
           }
 
           LocationEntity location =  locations.firstWhere((element) => element.locationsId == item.locationsId);
-          String location_txt = _buildLocationString(location);
+          String location_txt = SharedFunc.buildLocationString(location);
 
           tableRowsLocated.add(
             TableRow(children: [
@@ -315,12 +283,21 @@ class _StockDetailsState extends State<StockDetails> {
                       child: Text('Convertir en ubicación favorita'),
                     ),
                   ],
-                  onSelected: (value) {
+                  onSelected: (value) async{
                     // Acción a realizar al seleccionar una opción
-                    print("Selected value: $value");
+                    //print("Selected value: $value");
                     if(value == 1){
-                      _popupStockRemove(context, item, locations);
+                      // _popupStockRemove(context, item, locations);
                       //popupStockRemove(context, item);
+                     bool resultBackNavigation = await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => RemoveStock( item: item, locationOld: locations, items: locatedElements)),
+                      );
+                      log("resultBackNavigation: $resultBackNavigation");
+                      if(resultBackNavigation){
+                        _reloadTableProducts(item.productsId!);
+                      }
+                                  
                     }
                     if(value == 2){
                       _popupMoveToCero(context, item);
@@ -363,7 +340,7 @@ class _StockDetailsState extends State<StockDetails> {
                     message: "${item.cajasAlias} ${item.cajasName}",
                     showDuration: Duration(seconds: 5),
                     child: Text(
-                      '${item.cajasAlias} ${item.cajasName}',
+                      '${item.cajasId} ${item.cajasName}',
                       overflow: TextOverflow.ellipsis
                     ),
                   )
@@ -377,96 +354,161 @@ class _StockDetailsState extends State<StockDetails> {
 
       //añadimos los prooductos ubicados
       if(isLocated){
-        stockLocations.add(GestureDetector(
-          onTap: () {
-            print('Clic en Card');
-            // Navigator.push(
-            //   context,
-            //   MaterialPageRoute(
-            //       builder: (context) => QuantityMovePage(
-            //             from: "",
-            //             quantity: quantityLocated.toInt(),
-            //             productsLocation: locatedElements.first,
-            //           )),
-            // );
-          },
-          child: Card(
-            margin: EdgeInsets.all(6.0),
-            child: Padding(
-              padding: const EdgeInsets.all(0.0),
-              child: Column(
-                children: [
-                  const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Padding(
-                        padding: EdgeInsets.fromLTRB(8.0, 0, 8.0, 2.0),
-                        child: Center(child: Text("PRODUCTOS UBICADOS")),
-                      )
-                    ],
-                  ),
-                  Table(
-                    border: TableBorder.all(color: Colors.grey),
-                    columnWidths: const {
-                      0: FlexColumnWidth(0.5),
-                      1: FlexColumnWidth(1.5),
-                      2: FlexColumnWidth(0.7),
-                      3: FlexColumnWidth(1.5),
-                    },
-                    children: tableRowsLocated
-                  ),
-                  
-                ],
-              ),
-            )
-          ),
+        stockLocations.add(Card(
+          margin: EdgeInsets.all(6.0),
+          child: Padding(
+            padding: const EdgeInsets.all(0.0),
+            child: Column(
+              children: [
+                const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(8.0, 0, 8.0, 2.0),
+                      child: Center(child: Text("PRODUCTOS UBICADOS")),
+                    )
+                  ],
+                ),
+                Table(
+                  border: TableBorder.all(color: Colors.grey),
+                  columnWidths: const {
+                    0: FlexColumnWidth(0.5),
+                    1: FlexColumnWidth(1.5),
+                    2: FlexColumnWidth(0.7),
+                    3: FlexColumnWidth(1.5),
+                  },
+                  children: tableRowsLocated
+                ),
+                
+              ],
+            ),
+          )
         ));
+      }
+      for(ProductsLocationEntity item  in productsLocationZero){
+        // productos sin ubicar
+        //if (item.located! > 0) {
+          //isUnLocated = true;
+          String quantityUnLocated = (item.quantity! - item.located!).toString();
+
+          if(item.quantityMax! > 0){
+            quantityUnLocated += 'max ${item.quantityMax!} ud';
+          }
+
+          tableRowsUnLocated.add(
+            TableRow(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(0.0),
+                  child:  Container(
+                    width: 40,
+                    height: 20,
+                    child: PopupMenuButton(
+                      icon: const Icon(Icons.settings),
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 1,
+                          child: Text('Mover'),
+                        ),
+                      ],
+                      onSelected: (value) async {
+                        // Acción a realizar al seleccionar una opción
+                        //print("Selected value: $value");
+                        if(value == 1){
+                          bool resultBackNavigation = await Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => ChangeLocation( item: item, locationOld: locations, items: locatedElements)),
+                          );
+                          log("resultBackNavigation: $resultBackNavigation");
+                          if(resultBackNavigation){
+                            _reloadTableProducts(item.productsId!);
+                          }
+                        }     
+                      }              
+                    )
+                  )
+                                  
+                 
+                /*TextButton(
+                  onPressed: () async {
+                    // Action to perform when the button is pressed
+                    //popUpLocationChange(context, item, locations);
+                    // log("item: ${item.props}");
+                    // print("locations: ${locations.first.props}");
+                    // log("locatedElements: ${locatedElements.first.props}");
+                    await _navegateToWindow(context, item, locations, locatedElements);
+                    
+                    // bool resultBackNavigation = await Navigator.push(
+                    //     context,
+                    //     MaterialPageRoute(builder: (context) => RemoveStock( item: item, locationOld: locations, items: locatedElements)),
+                    //   );
+                    //   log("resultBackNavigation: $resultBackNavigation");
+                    //   if(resultBackNavigation){
+                    //     _reloadTableProducts(item.productsId!);
+                    //   }
+                  },
+                  child: Text('MOVER', style: TextStyle(fontSize: 12),),
+                )*/
+              ),
+              
+              Padding(
+                padding: const EdgeInsets.all(5.0),
+                child:  Align(
+                  alignment: Alignment.bottomCenter,
+                  heightFactor: 2,
+                  child: Text('$quantityUnLocated')
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(5.0),
+                child:  Align(
+                  alignment: Alignment.bottomCenter,
+                  heightFactor: 2,
+                  child: Tooltip(
+                    message: "${item.cajasId} ${item.cajasName}",
+                    showDuration: Duration(seconds: 5),
+                    child: Text(
+                      '${item.cajasId} ${item.cajasName}',
+                      overflow: TextOverflow.ellipsis
+                    ),
+                  )
+                ),
+              ),
+            ]),
+          );
+        //}
       }
 
       //if(isUnLocated){
 
-        stockLocations.add(GestureDetector(
-            onTap: () {
-              print('Clic en Card');
-              // Navigator.push(
-              //   context,
-              //   MaterialPageRoute(
-              //       builder: (context) => QuantityMovePage(
-              //             from: "",
-              //             quantity: sinUbicar.toInt(),
-              //             productsLocation: ProductsLocation.empty(),
-              //           )),
-              // );
-            },
-            child: Card(
-              margin: EdgeInsets.all(0.0),
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Column(
+        stockLocations.add(Card(
+          margin: EdgeInsets.all(0.0),
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Column(
+              children: [
+                const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Padding(
-                          padding: EdgeInsets.fromLTRB(8.0, 0, 8.0, 2.0),
-                          child: Text("PRODUCTOS SIN UBICAR"),
-                        )
-                      ]
-                    ),
-                    Table(
-                      border: TableBorder.all(color: Colors.grey),
-                      columnWidths: const {
-                        0: FlexColumnWidth(0.8),
-                        1: FlexColumnWidth(0.7),
-                        2: FlexColumnWidth(1.5),
-                        3: FlexColumnWidth(1),
-                      },
-                      children: tableRowsUnLocated
-                    ),
-                  ],
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(8.0, 0, 8.0, 2.0),
+                      child: Text("PRODUCTOS SIN UBICAR"),
+                    )
+                  ]
                 ),
-              )),
-          ));
+                Table(
+                  border: TableBorder.all(color: Colors.grey),
+                  columnWidths: const {
+                    0: FlexColumnWidth(0.3),
+                    1: FlexColumnWidth(0.7),
+                    2: FlexColumnWidth(1.5),
+                    3: FlexColumnWidth(1),
+                  },
+                  children: tableRowsUnLocated
+                ),
+              ],
+            ),
+          )));
       //}
       
     } 
@@ -505,13 +547,13 @@ class _StockDetailsState extends State<StockDetails> {
                   log("vamos a la derecha ");
                 },
                 child: Center(
-                    child: Column(children: [
-                  Expanded(
-                      child: SingleChildScrollView(
-                    child: Column(
-                        //
-                        children: stockLocations),
-                  )),
+                  child: Column(children: [
+                    Expanded(
+                        child: SingleChildScrollView(
+                      child: Column(
+                          //
+                          children: stockLocations),
+                    )),
                 ])),
               ),
             ),
@@ -526,149 +568,741 @@ class _StockDetailsState extends State<StockDetails> {
 
     quantityToMoveController.text = item.located.toString();
 
+    List<Widget> locationButtons = [];
+
     String locationPastTxt = "";
     locationOld.forEach((element) {
     
-      locationPastTxt += _buildLocationString(element) + "\t";
+      locationPastTxt += "${SharedFunc.buildLocationString(element)}\t";
+      locationButtons.add(
+        TextButton(
+          onPressed: (){
+            log("LocationId: ${element.locationsId}");
+          },//_locationPresed(element.locationsId), 
+          child: Text(SharedFunc.buildLocationString(element), style: TextStyle(color: Colors.blueAccent),)
+        )
+      );
 
     });
+
     int numElements = 0;
+    bool isSkuUbicationVisible = false;
+
+    Object? resultPopUp = await showGeneralDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierLabel: "Dialog",
+      pageBuilder: (context, animation1, animation2) {
+        return Material(
+          child: FocusScope(
+            //type: MaterialType.transparency,
+            child: Consumer<SearchLocationProvider>(
+              builder: (context, provider, child) {
+              return SingleChildScrollView(
+                child: Container(
+                  width: MediaQuery.of(context).size.width,
+                  height: MediaQuery.of(context).size.height,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Aquí va tu contenido de diálogo, incluyendo los TextFields.
+                       Expanded(
+                            child: Stack(
+                              children: [
+                                SingleChildScrollView(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      SharedFunc.buildTextRow('', item.productsSku!, true),
+                                      SharedFunc.buildTextRow('', item.productsName!, false),
+                                      const SizedBox(height: 6),
+                                      SharedFunc.buildTextRow('', 'Ubicaciónes: \n(está o estuvo el producto)', false),
+                                      SharedFunc.buildTextButtonRow('', locationPastTxt, locationButtons, false),
+                                      const SizedBox(height: 6),
+                                      Row(
+                                        children: [
+                                          Flexible(
+                                            flex: 1,
+                                            child: Padding(
+                                              padding: const EdgeInsets.only(top: 8),
+                                              child: GestureDetector(
+                                                onTap:(){
+                                                  log("Search clicked");
+                                                  provider.searchLocation(searchController.text, item.cajasId!, item.productsId!);
+                                                },
+                                                child: TextField(
+                                                  controller: searchController,
+                                                  decoration: InputDecoration(
+                                                    labelText: 'Buscar ubicación(destino):',
+                                                    border: OutlineInputBorder(
+                                                      borderRadius: BorderRadius.circular(10.0),
+                                                      borderSide: const BorderSide(color: Colors.blue),
+                                                    ),
+                                                    suffixIcon: IconButton(
+                                                      icon: Icon(Icons.clear),
+                                                      onPressed: () {
+                                                        searchController.clear(); // Limpiar el texto
+                                                        provider.results = [];
+                                                        provider.isLoading = false;
+                                                      },
+                                                    ),
+                                                  ),
+                                                  onChanged: (query) {
+                                                    provider.searchLocation(query, item.cajasId!, item.productsId!);
+                                                  },
+                                                  onTap: (){
+                                                   
+                                                  }
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 6),
+                                       if (isSkuUbicationVisible)
+                                        // ignore: dead_code
+                                        SharedFunc.buildTextField(
+                                          context: context,
+                                          controller: skuUbicacionController,
+                                          labelText: 'SKU ubicación:',
+                                          height: 30,
+                                          readOnly: true,
+                                        ),
+                                      SharedFunc.buildTextField(
+                                         context: context,
+                                        controller: quantityToMoveController,
+                                        labelText: 'Cantidad a mover:',
+                                        height: 50,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (provider.showListResult)
+                                  Positioned(
+                                    //bottom: -30, // Position the list at the bottom
+                                    top: 160,
+                                    left: 0,
+                                    right: 0,
+                                    child: Material(
+                                      elevation: 4.0,
+                                      child: Container(
+                                        width: MediaQuery.of(context).size.width * 0.5,
+                                        height: 200,
+                                        child: SingleChildScrollView(
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: provider.results.map((option) {
+                                              String locationTxt = SharedFunc.buildLocationString(option);
+                                              return Flexible(
+                                                flex: 1,
+                                                child: Column(
+                                                  children: [
+                                                    SizedBox(
+                                                      height: 40,
+                                                      child: ListTile(
+                                                        dense: true,
+                                                        contentPadding: const EdgeInsets.symmetric(vertical: 2.0),
+                                                        title: Text(
+                                                          "${option.locationsSku}: $locationTxt",
+                                                          style: TextStyle(fontSize: 12),
+                                                        ),
+                                                        subtitle: Text("Descripción: ${option.description}"),
+                                                        onTap: () {
+                                                          // log("quantityToMoveController.text: ${quantityToMoveController.text}");
+                                                          // log("item: ${item.locationsId}");
+                                                          searchController.text = locationTxt;
+                                                          skuUbicacionController.text = option.locationsSku!;
+                                                          provider.showListResult = false;
+                                                          provider.selectedLocationsId = option.locationsId;
+                                                          provider.selectedProductsId = item.productsId!;
+                                                          SelectedLocation selectedLocation = SelectedLocation(
+                                                            option.locationsId,
+                                                            option.cajasId,
+                                                            item.productsId!,
+                                                            item.locationsId!,
+                                                            int.parse(quantityToMoveController.text),
+                                                          );
+                                                          provider.selectedLocationObj = selectedLocation;
+                                                        },
+                                                      ),
+                                                    ),
+                                                    if (provider.results.length != numElements) Divider(),
+                                                  ],
+                                                ),
+                                              );
+                                            }).toList(),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                TextButton(
+                                  style: TextButton.styleFrom(
+                                    textStyle: Theme.of(context).textTheme.bodyLarge,
+                                    backgroundColor: Colors.blueAccent,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                  child: const Text('MOVER', style: TextStyle(fontSize: 20.0)),
+                                  onPressed: () async {
+                                    provider.moveToLocation(int.parse(quantityToMoveController.text));
+                                    Navigator.pop(context, false);
+                                  },
+                                ),
+                                TextButton(
+                                  style: TextButton.styleFrom(
+                                    textStyle: Theme.of(context).textTheme.bodyLarge,
+                                    backgroundColor: Colors.blueAccent,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                  child: const Text('CERRAR', style: TextStyle(fontSize: 20.0)),
+                                  onPressed: () async {
+                                    provider.results = [];
+                                    provider.showListResult = false;
+                                    Navigator.pop(context, true);
+                                    return;
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                    ],
+                  ),
+                ),
+              );
+              }
+            ),
+          ),
+        );
+      },
+    );
+
     
-    bool resultPopUp = await showDialog(
+    
+    /*bool resultPopUp = await showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Consumer<SearchLocationProvider>(
+          builder: (context, provider, child) {
+            return Dialog(
+              insetPadding: EdgeInsets.zero, // Eliminar padding
+              backgroundColor: Colors.transparent, // Fondo transparente
+              child: Container(
+                width: MediaQuery.of(context).size.width, // Fullscreen width
+                height: MediaQuery.of(context).size.height, // Fullscreen height
+                color: Colors.white, // Color de fondo
+                padding: const EdgeInsets.all(8.0),
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: Stack(
+                        children: [
+                          SingleChildScrollView(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _buildTextRow('', item.productsSku!, true),
+                                _buildTextRow('', item.productsName!, false),
+                                const SizedBox(height: 6),
+                                _buildTextRow('', 'Ubicaciónes: \n(está o estuvo el producto)', false),
+                                _buildTextButtonRow('', locationPastTxt, locationButtons, false),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    Flexible(
+                                      flex: 1,
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(top: 8),
+                                        child: GestureDetector(
+                                          onTap:(){
+                                            log("Search clicked");
+                                            provider.searchLocation(searchController.text, item.cajasId!, item.productsId!);
+                                          },
+                                          child: TextField(
+                                            controller: searchController,
+                                            decoration: InputDecoration(
+                                              labelText: 'Buscar ubicación(destino):',
+                                              border: OutlineInputBorder(
+                                                borderRadius: BorderRadius.circular(10.0),
+                                                borderSide: const BorderSide(color: Colors.blue),
+                                              ),
+                                              suffixIcon: IconButton(
+                                                icon: Icon(Icons.clear),
+                                                onPressed: () {
+                                                  searchController.clear(); // Limpiar el texto
+                                                  provider.results = [];
+                                                  provider.isLoading = false;
+                                                },
+                                              ),
+                                            ),
+                                            onChanged: (query) {
+                                              provider.searchLocation(query, item.cajasId!, item.productsId!);
+                                            },
+                                            onTap: (){
+                                             
+                                            }
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                 if (isSkuUbicationVisible)
+                                  // ignore: dead_code
+                                  _buildTextField(
+                                    context: context,
+                                    controller: skuUbicacionController,
+                                    labelText: 'SKU ubicación:',
+                                    height: 30,
+                                    readOnly: true,
+                                  ),
+                                _buildTextField(
+                                   context: context,
+                                  controller: quantityToMoveController,
+                                  labelText: 'Cantidad a mover:',
+                                  height: 50,
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (provider.showListResult)
+                            Positioned(
+                              //bottom: -30, // Position the list at the bottom
+                              top: 160,
+                              left: 0,
+                              right: 0,
+                              child: Material(
+                                elevation: 4.0,
+                                child: Container(
+                                  width: MediaQuery.of(context).size.width * 0.5,
+                                  height: 200,
+                                  child: SingleChildScrollView(
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: provider.results.map((option) {
+                                        String locationTxt = _buildLocationString(option);
+                                        return Flexible(
+                                          flex: 1,
+                                          child: Column(
+                                            children: [
+                                              SizedBox(
+                                                height: 40,
+                                                child: ListTile(
+                                                  dense: true,
+                                                  contentPadding: const EdgeInsets.symmetric(vertical: 2.0),
+                                                  title: Text(
+                                                    "${option.locationsSku}: $locationTxt",
+                                                    style: TextStyle(fontSize: 12),
+                                                  ),
+                                                  subtitle: Text("Descripción: ${option.description}"),
+                                                  onTap: () {
+                                                    log("quantityToMoveController.text: ${quantityToMoveController.text}");
+                                                    log("item: ${item.locationsId}");
+                                                    searchController.text = locationTxt;
+                                                    skuUbicacionController.text = option.locationsSku!;
+                                                    provider.showListResult = false;
+                                                    provider.selectedLocationsId = option.locationsId;
+                                                    provider.selectedProductsId = item.productsId!;
+                                                    SelectedLocation selectedLocation = SelectedLocation(
+                                                      option.locationsId,
+                                                      option.cajasId,
+                                                      item.productsId!,
+                                                      item.locationsId!,
+                                                      int.parse(quantityToMoveController.text),
+                                                    );
+                                                    provider.selectedLocationObj = selectedLocation;
+                                                  },
+                                                ),
+                                              ),
+                                              if (provider.results.length != numElements) Divider(),
+                                            ],
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              textStyle: Theme.of(context).textTheme.bodyLarge,
+                              backgroundColor: Colors.blueAccent,
+                              foregroundColor: Colors.white,
+                            ),
+                            child: const Text('MOVER', style: TextStyle(fontSize: 20.0)),
+                            onPressed: () async {
+                              provider.moveToLocation(int.parse(quantityToMoveController.text));
+                              Navigator.pop(context, false);
+                            },
+                          ),
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              textStyle: Theme.of(context).textTheme.bodyLarge,
+                              backgroundColor: Colors.blueAccent,
+                              foregroundColor: Colors.white,
+                            ),
+                            child: const Text('CERRAR', style: TextStyle(fontSize: 20.0)),
+                            onPressed: () async {
+                              provider.results = [];
+                              provider.showListResult = false;
+                              Navigator.pop(context, true);
+                              return;
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    )*/
+    
+    
+    /*showDialog(
       context: context,
       builder: (BuildContext context) {
         // ignore: deprecated_member_use
         return Consumer<SearchLocationProvider>(
           builder: (context, provider, child) {
+            return  Container(
+                width: MediaQuery.of(context).size.width, // Fullscreen width
+                height: MediaQuery.of(context).size.height,
+                color: Colors.amber, 
+                child: Column(children: [ 
+                  Stack(
+                    children: [
+                      // Existing dialog content (excluding the list)
+                      SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildTextRow('', item.productsSku!, true),
+                            _buildTextRow('', item.productsName!, false),
+                            const SizedBox(height: 6),
+                            _buildTextRow('','Ubicaciónes: \n(está o estuvo el producto)', false),
+                            _buildTextRow('', locationPastTxt, false),
+                            const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Flexible(
+                                flex: 1,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: TextField(
+                                    controller: searchController,
+                                    decoration: InputDecoration(
+                                      labelText: 'Buscar ubicación(destino):',
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10.0), borderSide: const BorderSide(color: Colors.blue)),
+                                      suffixIcon: IconButton(
+                                        icon: Icon(Icons.clear),
+                                        onPressed: () {
+                                          searchController.clear(); // Limpiar el texto
+                                          provider.results = [];
+                                          provider.isLoading = false;
+                                        },
+                                      ),
+                                      
+                                    ),
+                                    onChanged: (query){
+                                      provider.searchLocation(query, item.cajasId!, item.productsId!);
+                                      if(provider.results.isNotEmpty){
+                                        //provider.isLoading = false;
+                                        //provider.showListResult = true;
+                                      }
+                                    } 
+                                  ),
+                                ),
+                              ),
+                              
+                            ],
+                          ),   
+                          const SizedBox(height: 6),                      
+                          _buildTextField(
+                              controller: skuUbicacionController,
+                              labelText: 'SKU ubicación:',
+                              height: 30,
+                              readOnly: true
+                            ),
+                          _buildTextField(
+                              controller: quantityToMoveController,
+                              labelText: 'Cantidad a mover:',
+                              height: 50
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Overlay for the list (conditionally shown)
+                      provider.showListResult
+                        ? Positioned(
+                            bottom: -30, // Position the list at the bottom
+                            left: 0,
+                            right: 0,
+                            //top:10,
+                            child: Material(
+                              elevation: 4.0,
+                              child: Container(
+                                width: MediaQuery.of(context).size.width * 0.5,
+                                height: 150,
+                                child: SingleChildScrollView(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: provider.results.map((option) {
+                                      String locationTxt = _buildLocationString(option);
+                                      //log("locationTxt: $locationTxt");
+                                      numElements++;
+                                      return Flexible(
+                                        flex:1,
+                                        child: Column(
+                                          children: [
+                                            SizedBox(
+                                              height: 40,
+                                              child: ListTile(
+                                                dense: true,
+                                                //contentPadding: const EdgeInsets.only(top: 0, bottom: -10, left: 8.0, right: 8.0), 
+                                                contentPadding: const EdgeInsets.symmetric(vertical: 2.0),
+                                                title: Text("${option.locationsSku}: $locationTxt", style: TextStyle(fontSize: 12)),
+                                                subtitle: Text("Descripción: ${option.description}"),
+                                                onTap: () {
+                                                  //log("onTap ListTile: ${option.locationsSku}");
+                                                  searchController.text = locationTxt;
+                                                  skuUbicacionController.text = option.locationsSku!;
+                                                  
+                                                  provider.showListResult = false;
+                                                  provider.selectedLocationsId = option.locationsId;
+                                                  provider.selectedProductsId = item.productsId!;
+                                                  SelectedLocation selectedLocation = SelectedLocation(option.locationsId,
+                                                                                                      option.cajasId,
+                                                                                                      item.productsId!,
+                                                                                                      item.locationsId!,
+                                                                                                      int.parse(quantityToMoveController.text)
+                                                                                                    );
+                                                  provider.selectedLocationObj = selectedLocation;
+                                                            
+                                                },
+                                              ),
+                                            ),
+                                            if (provider.results.length != numElements ) Divider(),
+                                          ],
+                                        ),
+                                      );
+                                      
+                                    }).toList(),
+                                  ),
+                                ),
+                              ),
+                            ),
+                              
+                          )
+                        : SizedBox(),                
+                      ],
+                  ),
+                  Row(
+                    children: [
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          textStyle: Theme.of(context).textTheme.bodyLarge,
+                          backgroundColor: Colors.blueAccent,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text(
+                          'MOVER',
+                          style: TextStyle(fontSize: 20.0),
+                        ),
+                        onPressed: () async {
+                          if (kDebugMode) {
+                            print("Cerrar");
+                          }
+                          provider.moveToLocation(int.parse(quantityToMoveController.text));
+                                    
+                          // ignore: use_build_context_synchronously
+                          Navigator.pop(context, false);
+                        },
+                      ),
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          textStyle: Theme.of(context).textTheme.bodyLarge,
+                          backgroundColor: Colors.blueAccent,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('CERRAR', style: TextStyle(fontSize: 20.0)),
+                        onPressed: () async {
+                          provider.results = [];
+                          provider.showListResult = false;
+                          // ignore: use_build_context_synchronously
+                          Navigator.pop(context, true);
+                          return;
+                        },
+                      )
+                    ],
+                  ),
+                ],)
+            );            
+          }
+        );
+      },
+    )*//*.then((value) {
+      return value ?? false; // Manejar el caso de cierre sin respuesta
+    });
 
-            return AlertDialog(
+    if(resultPopUp){
+      _reloadTableProducts(item.productsId!);
+    };*/
+
+  }
+     /*return AlertDialog(
               title: const Text('Cambiar de ubicación'),
-              content: Stack(
-                children: [
-                  // Existing dialog content (excluding the list)
-                  SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _buildTextRow('', item.productsSku!, true),
-                        _buildTextRow('', item.productsName!, false),
-                        const SizedBox(height: 6),
-                        _buildTextRow('','Ubicaciónes: \n(está o estuvo el producto)', false),
-                        _buildTextRow('', locationPastTxt, false),
-                        const SizedBox(height: 6),
-                       Row(
-                         children: [
-                           Flexible(
-                             flex: 1,
-                             child: Padding(
-                               padding: const EdgeInsets.only(top: 8),
-                               child: TextField(
-                                 controller: searchController,
-                                 decoration: InputDecoration(
-                                   labelText: 'Buscar ubicación(destino):',
-                                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10.0), borderSide: const BorderSide(color: Colors.blue)),
-                                   suffixIcon: IconButton(
-                                     icon: Icon(Icons.clear),
-                                     onPressed: () {
-                                       searchController.clear(); // Limpiar el texto
-                                       provider.results = [];
-                                       provider.isLoading = false;
-                                     },
+              content: Container(
+                width: MediaQuery.of(context).size.width, // Fullscreen width
+                height: MediaQuery.of(context).size.height, 
+                child: Stack(
+                  children: [
+                    // Existing dialog content (excluding the list)
+                    SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildTextRow('', item.productsSku!, true),
+                          _buildTextRow('', item.productsName!, false),
+                          const SizedBox(height: 6),
+                          _buildTextRow('','Ubicaciónes: \n(está o estuvo el producto)', false),
+                          _buildTextRow('', locationPastTxt, false),
+                          const SizedBox(height: 6),
+                         Row(
+                           children: [
+                             Flexible(
+                               flex: 1,
+                               child: Padding(
+                                 padding: const EdgeInsets.only(top: 8),
+                                 child: TextField(
+                                   controller: searchController,
+                                   decoration: InputDecoration(
+                                     labelText: 'Buscar ubicación(destino):',
+                                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10.0), borderSide: const BorderSide(color: Colors.blue)),
+                                     suffixIcon: IconButton(
+                                       icon: Icon(Icons.clear),
+                                       onPressed: () {
+                                         searchController.clear(); // Limpiar el texto
+                                         provider.results = [];
+                                         provider.isLoading = false;
+                                       },
+                                     ),
+                                     
                                    ),
-                                   
+                                   onChanged: (query){
+                                     provider.searchLocation(query, item.cajasId!, item.productsId!);
+                                     if(provider.results.isNotEmpty){
+                                       //provider.isLoading = false;
+                                       //provider.showListResult = true;
+                                     }
+                                   } 
                                  ),
-                                 onChanged: (query){
-                                   provider.searchLocation(query, item.cajasId!, item.productsId!);
-                                   if(provider.results.isNotEmpty){
-                                     //provider.isLoading = false;
-                                     //provider.showListResult = true;
-                                   }
-                                 } 
                                ),
                              ),
-                           ),
-                           
-                         ],
-                       ),   
-                       const SizedBox(height: 6),                      
-                       _buildTextField(
-                          controller: skuUbicacionController,
-                          labelText: 'SKU ubicación:',
-                          height: 30,
-                          readOnly: true
-                        ),
-                       _buildTextField(
-                          controller: quantityToMoveController,
-                          labelText: 'Cantidad a mover:',
-                          height: 50
-                        ),
-                      ],
+                             
+                           ],
+                         ),   
+                         const SizedBox(height: 6),                      
+                         _buildTextField(
+                            controller: skuUbicacionController,
+                            labelText: 'SKU ubicación:',
+                            height: 30,
+                            readOnly: true
+                          ),
+                         _buildTextField(
+                            controller: quantityToMoveController,
+                            labelText: 'Cantidad a mover:',
+                            height: 50
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  // Overlay for the list (conditionally shown)
-                  provider.showListResult
-                    ? Positioned(
-                        bottom: -30, // Position the list at the bottom
-                        left: 0,
-                        right: 0,
-                        //top:10,
-                        child: Material(
-                          elevation: 4.0,
-                          child: Container(
-                            width: MediaQuery.of(context).size.width * 0.5,
-                            height: 150,
-                            child: SingleChildScrollView(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: provider.results.map((option) {
-                                  String locationTxt = _buildLocationString(option);
-                                  //log("locationTxt: $locationTxt");
-                                  numElements++;
-                                  return Flexible(
-                                    flex:1,
-                                    child: Column(
-                                      children: [
-                                        SizedBox(
-                                          height: 40,
-                                          child: ListTile(
-                                            dense: true,
-                                            //contentPadding: const EdgeInsets.only(top: 0, bottom: -10, left: 8.0, right: 8.0), 
-                                            contentPadding: const EdgeInsets.symmetric(vertical: 2.0),
-                                            title: Text("${option.locationsSku}: $locationTxt", style: TextStyle(fontSize: 12)),
-                                            subtitle: Text("Descripción: ${option.description}"),
-                                            onTap: () {
-                                              //log("onTap ListTile: ${option.locationsSku}");
-                                              searchController.text = locationTxt;
-                                              skuUbicacionController.text = option.locationsSku!;
-                                              
-                                              provider.showListResult = false;
-                                              provider.selectedLocationsId = option.locationsId;
-                                              provider.selectedProductsId = item.productsId!;
-                                              SelectedLocation selectedLocation = SelectedLocation(option.locationsId,
-                                                                                                  option.cajasId,
-                                                                                                  item.productsId!,
-                                                                                                  item.locationsId!,
-                                                                                                  int.parse(quantityToMoveController.text)
-                                                                                                );
-                                              provider.selectedLocationObj = selectedLocation;
-                                                        
-                                            },
+                    // Overlay for the list (conditionally shown)
+                    provider.showListResult
+                      ? Positioned(
+                          bottom: -30, // Position the list at the bottom
+                          left: 0,
+                          right: 0,
+                          //top:10,
+                          child: Material(
+                            elevation: 4.0,
+                            child: Container(
+                              width: MediaQuery.of(context).size.width * 0.5,
+                              height: 150,
+                              child: SingleChildScrollView(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: provider.results.map((option) {
+                                    String locationTxt = _buildLocationString(option);
+                                    //log("locationTxt: $locationTxt");
+                                    numElements++;
+                                    return Flexible(
+                                      flex:1,
+                                      child: Column(
+                                        children: [
+                                          SizedBox(
+                                            height: 40,
+                                            child: ListTile(
+                                              dense: true,
+                                              //contentPadding: const EdgeInsets.only(top: 0, bottom: -10, left: 8.0, right: 8.0), 
+                                              contentPadding: const EdgeInsets.symmetric(vertical: 2.0),
+                                              title: Text("${option.locationsSku}: $locationTxt", style: TextStyle(fontSize: 12)),
+                                              subtitle: Text("Descripción: ${option.description}"),
+                                              onTap: () {
+                                                //log("onTap ListTile: ${option.locationsSku}");
+                                                searchController.text = locationTxt;
+                                                skuUbicacionController.text = option.locationsSku!;
+                                                
+                                                provider.showListResult = false;
+                                                provider.selectedLocationsId = option.locationsId;
+                                                provider.selectedProductsId = item.productsId!;
+                                                SelectedLocation selectedLocation = SelectedLocation(option.locationsId,
+                                                                                                    option.cajasId,
+                                                                                                    item.productsId!,
+                                                                                                    item.locationsId!,
+                                                                                                    int.parse(quantityToMoveController.text)
+                                                                                                  );
+                                                provider.selectedLocationObj = selectedLocation;
+                                                          
+                                              },
+                                            ),
                                           ),
-                                        ),
-                                        if (provider.results.length != numElements ) Divider(),
-                                      ],
-                                    ),
-                                  );
-                                  
-                                }).toList(),
+                                          if (provider.results.length != numElements ) Divider(),
+                                        ],
+                                      ),
+                                    );
+                                    
+                                  }).toList(),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                          
-                      )
-                    : SizedBox(),                
-                  ],
+                            
+                        )
+                      : SizedBox(),                
+                    ],
+                ),
               ),
               actions: [
                 TextButton(
@@ -707,19 +1341,7 @@ class _StockDetailsState extends State<StockDetails> {
                   },
                 ),
               ],
-            );
-          }
-        );
-      },
-    ).then((value) {
-      return value ?? false; // Manejar el caso de cierre sin respuesta
-    });
-
-    if(resultPopUp){
-      _reloadTableProducts(item.productsId!);
-    };
-
-  }
+            );*/
 
   // Mover a ubicación CERO
   Future<void> _popupMoveToCero(context, ProductsLocationEntity item) async{
@@ -745,8 +1367,8 @@ class _StockDetailsState extends State<StockDetails> {
                 child: Column(
                      mainAxisSize: MainAxisSize.min,
                      children: [
-                      _buildTextRow('', item.productsSku!, true),
-                      _buildTextRow('', item.productsName!, false),
+                      SharedFunc.buildTextRow('', item.productsSku!, true),
+                      SharedFunc.buildTextRow('', item.productsName!, false),
                       Divider(),
                       const SizedBox(height: 8,),
                       Row(
@@ -860,8 +1482,8 @@ class _StockDetailsState extends State<StockDetails> {
                 child: Column(
                      mainAxisSize: MainAxisSize.min,
                      children: [
-                      _buildTextRow('', item.productsSku!, true),
-                      _buildTextRow('', item.productsName!, false),
+                      SharedFunc.buildTextRow('', item.productsSku!, true),
+                      SharedFunc.buildTextRow('', item.productsName!, false),
                       Divider(),
                       const SizedBox(height: 8,),
                       const Row(
@@ -951,8 +1573,8 @@ class _StockDetailsState extends State<StockDetails> {
                 child: Column(
                      mainAxisSize: MainAxisSize.min,
                      children: [
-                      _buildTextRow('', item.productsSku!, true),
-                      _buildTextRow('', item.productsName!, false),
+                      SharedFunc.buildTextRow('', item.productsSku!, true),
+                      SharedFunc.buildTextRow('', item.productsName!, false),
                       Divider(),
                       const SizedBox(height: 8,),
                       Row(
@@ -1026,24 +1648,6 @@ class _StockDetailsState extends State<StockDetails> {
       _reloadTableProducts(item.productsId!);
     }
   }
-
-  String _buildLocationString(LocationEntity location){
-    String location_txt = "";
-    if(location.P != ''){
-      location_txt += "P${location.P}";
-    }
-    if(location.R != ''){
-      location_txt += "-R${location.R}";
-    }
-    if(location.A != ''){
-      location_txt += "-A${location.A}";
-    }
-    if(location.H != ''){
-      location_txt += "-H${location.H}";
-    }
-
-    return location_txt;
-  }
   
   Future<void> popUpLocationChange(BuildContext context, ProductsLocationEntity item, List<LocationEntity> locationOld) async {
     final productsLocationProvider = Provider.of<ProductsLocationProvider>(context, listen: false);
@@ -1065,7 +1669,7 @@ class _StockDetailsState extends State<StockDetails> {
     String locationPastTxt = "";
     locationOld.forEach((element) {
     
-      locationPastTxt += _buildLocationString(element) + "\t";
+      locationPastTxt += "${SharedFunc.buildLocationString(element)}\t";
 
     });
     //List<String> stores = ["Principal", "secondario", "tercero", "cuarto"];
@@ -1089,13 +1693,13 @@ class _StockDetailsState extends State<StockDetails> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        _buildTextRow('', item.productsSku!, true),
-                        _buildTextRow('', item.productsName!, false),
+                        SharedFunc.buildTextRow('', item.productsSku!, true),
+                        SharedFunc.buildTextRow('', item.productsName!, false),
                          const SizedBox(height: 6),
-                        _buildTextRow('', "Ubicaciones: \n(está o estuvo el producto)", false),
-                        _buildTextRow('', locationPastTxt, false),
+                        SharedFunc.buildTextRow('', "Ubicaciones: \n(está o estuvo el producto)", false),
+                        SharedFunc.buildTextRow('', locationPastTxt, false),
                          const SizedBox(height: 6),
-                        _buildDropdownMenu(optionSelected, stores),
+                        SharedFunc.buildDropdownMenu(optionSelected, stores, selectedStore),
                         Row(
                          children: [
                            Flexible(
@@ -1128,13 +1732,15 @@ class _StockDetailsState extends State<StockDetails> {
                          ],
                        ),   
                         const SizedBox(height: 6),
-                        _buildTextField(
+                        SharedFunc.buildTextField(
+                          context: context,
                           controller: skuUbicacionController,
                           labelText: 'SKU ubicación:',
                           height: 30,
                           readOnly: true
                         ),
-                        _buildTextField(
+                        SharedFunc.buildTextField(
+                          context: context,
                           controller: quantityToMoveController,
                           labelText: 'Cantidad a mover:',
                           height: 50
@@ -1157,7 +1763,7 @@ class _StockDetailsState extends State<StockDetails> {
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: provider.results.map((option) {
-                                  String locationTxt = _buildLocationString(option);
+                                  String locationTxt = SharedFunc.buildLocationString(option);
                                   //log("locationTxt: $locationTxt");
                                   numElements++;
                                   return Flexible(
@@ -1246,244 +1852,4 @@ class _StockDetailsState extends State<StockDetails> {
     
   }
   
-  Widget _buildTextRow(String label, String value, bool bold) {
-  return Row(
-    children: [
-      Flexible(
-        flex: 1,
-        child: Text("$label $value", style: TextStyle(fontWeight: bold ? FontWeight.bold : FontWeight.normal)),
-      ),
-    ],
-  );
-}
-
-  Widget _buildSearchField(TextEditingController controller, SearchLocationProvider provider, ProductsLocationEntity item) {
-  return TextField(
-    controller: controller,
-    decoration: InputDecoration(
-      labelText: 'Buscar ubicación (destino):',
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10.0),
-        borderSide: const BorderSide(color: Colors.blue)
-      ),
-      suffixIcon: IconButton(
-        icon: const Icon(Icons.clear),
-        onPressed: () {
-          controller.clear();
-          provider.results = [];
-          provider.isLoading = false;
-        },
-      ),
-    ),
-    onChanged: (query) {
-      provider.searchLocation(query, item.cajasId!, item.productsId!);
-      if (provider.results.isNotEmpty) {
-        //showMenu = true;
-      }
-    },
-  );
-}
-  
-  Widget _buildPopupMenu(SearchLocationProvider provider, TextEditingController searchController) {
-    return Column(
-      children: provider.results.map((location) {
-        return ListTile(
-          title: Text(location.txtLocation!), // Asume que tienes una propiedad txtLocation
-          subtitle: Text("Descripción: ${location.description}"),
-          onTap: () {
-            // Acción al seleccionar un resultado
-            print("Seleccionado: ${location.txtLocation}");
-          },
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildDropdownMenu(TextEditingController optionSelected, List<StoreEntity> suggestions) {
-    
-   // log("Store: ${suggestions.length} - Store: ${stores.length}");
-
-    return SizedBox(
-      height: 60,
-      child: DropdownButtonFormField(
-        decoration: InputDecoration(
-          labelText: 'Selecciona una opción',
-          border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10.0),
-          borderSide: const BorderSide(color: Colors.blue)
-        ),
-        ),
-        items: suggestions.map((item) {
-          return DropdownMenuItem<StoreEntity>(
-            value: item,
-            child: Text("${item.cajasId} ${item.cajasName.toString()}"),
-          );
-        }).toList(),
-        onChanged: (StoreEntity? newValue){
-          optionSelected.text = newValue!.cajasId.toString();
-        }
-      ),
-    );
-    
-  }
-
-  Widget _buildAutocompleteFieldOld(SearchLocationProvider provider, TextEditingController controller, TextEditingController textEditingController, int cajasId, int productsId) {
-    return Autocomplete<LocationEntity>(
-      optionsBuilder: (TextEditingValue textEditingValue) async {
-        if (textEditingValue.text.isEmpty) {
-          return const Iterable<LocationEntity>.empty();
-        }
-        await provider.searchLocation(textEditingValue.text, cajasId, productsId);
-        return provider.results;
-      },
-      displayStringForOption: (LocationEntity location) => location.txtLocation!,
-      onSelected: (LocationEntity selection) {
-        final locationTxt = _buildLocationString(selection);
-        controller.text = locationTxt;
-        provider.selectedLocation = locationTxt;
-      },
-      fieldViewBuilder: (BuildContext context, textEditingController, FocusNode focusNode, VoidCallback onFieldSubmitted) {
-        return TextField(
-          controller: textEditingController,
-          focusNode: focusNode,
-          decoration: const InputDecoration(
-            labelText: 'Buscar ubicación',
-            border: OutlineInputBorder(),
-          ),
-        );
-      },
-      optionsViewBuilder: (BuildContext context, AutocompleteOnSelected<LocationEntity> onSelected, Iterable<LocationEntity> options) {
-        return Align(
-          alignment: Alignment.topLeft,
-          child: Material(
-            elevation: 4.0,
-            child: Container(
-              width: MediaQuery.of(context).size.width * 0.5,
-              height: 100,
-              child: SingleChildScrollView(
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(8.0),
-                  itemCount: options.length,
-                  shrinkWrap: true,
-                  itemBuilder: (BuildContext context, int index) {
-                    final location = options.elementAt(index);
-                    final locationTxt = _buildLocationString(location);
-                    return ListTile(
-                      title: Text(locationTxt),
-                      subtitle: Text("Descripción: ${location.description}"),
-                      onTap: () {
-                        textEditingController.text = locationTxt;
-                        onSelected(location);
-                      },
-                    );
-                  },
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-  
-  Widget _buildAutocompleteField(SearchLocationProvider provider, TextEditingController controller, TextEditingController textEditingController, int cajasId, int productsId) {
-    return Autocomplete<LocationEntity>(
-      optionsBuilder: (TextEditingValue textEditingValue) async {
-        log("textEditingValue: ${textEditingValue.text}");
-        // if(textEditingValue.text.isEmpty){
-        //   return const Iterable<Location>.empty();
-        // }
-        //await provider.searchLocation(textEditingValue.text, cajasId, productsId);
-        List<LocationEntity> locFinded = provider.results;/*.where((location) => 
-              location.txtLocation.toLowerCase().contains(textEditingValue.text.toLowerCase())
-            ).toList();*/
-        log("locFinded: $locFinded");
-        return locFinded;/*.where((location) => 
-              location.txtLocation.toLowerCase().contains(textEditingValue.text.toLowerCase())
-            ).toList();*/
-      },
-      displayStringForOption: (LocationEntity location) => location.txtLocation!,
-      onSelected: (value) => print(value.txtLocation),
-      fieldViewBuilder: (BuildContext context, TextEditingController textEditingController, FocusNode focusNode, VoidCallback onFieldSubmitted) {
-        return TextField(
-          controller: textEditingController,
-          focusNode: focusNode,
-          decoration: const InputDecoration(
-            labelText: 'Buscar ubicación',
-            border: OutlineInputBorder(),
-          ),
-          onChanged:(value) async{
-            await provider.searchLocation(textEditingController.text, cajasId, productsId);
-          },
-        );
-      },
-      optionsViewBuilder: (BuildContext context, AutocompleteOnSelected<LocationEntity> onSelected, Iterable<LocationEntity> options) {
-
-        return Align(
-          alignment: Alignment.topLeft,
-          child: Material(
-            elevation: 4.0,
-            child: Container(
-              width: MediaQuery.of(context).size.width * 0.5,
-              //height: 100,
-              child: SingleChildScrollView(
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(8.0),
-                  itemCount: options.length,
-                  shrinkWrap: true,
-                  itemBuilder: (BuildContext context, int index) {
-                    final location = options.elementAt(index);
-                    final locationTxt = _buildLocationString(location);
-                    return ListTile(
-                      title: Text(locationTxt),
-                      subtitle: Text("Descripción: ${location.description}"),
-                      onTap: () {
-                        textEditingController.text = locationTxt;
-                        onSelected(location);
-                      },
-                    );
-                  },
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String labelText,
-    required double height,
-    bool readOnly = false
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 8, bottom: 8),
-      child: SizedBox(
-        height: height,
-        child: TextField(
-          controller: controller,
-          readOnly: readOnly,
-          decoration: InputDecoration(
-            labelText: labelText,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10.0), borderSide: const BorderSide(color: Colors.blue)),
-            suffixIcon: IconButton(
-              icon: Icon(Icons.clear),
-              onPressed: () {
-                controller.clear(); // Limpiar el texto
-              },
-            )
-          ),
-          onChanged: (value) async {
-            if(value.isNotEmpty){
-               controller.text = value;
-            }
-          },
-        ),
-      ),
-    );
-  }
-
-
 }

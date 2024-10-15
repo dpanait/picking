@@ -46,7 +46,20 @@ Future<void> initializeDependencies() async {
   //   await database.execute(
   //       'ALTER TABLE `Product` ADD COLUMN (`ordersProductsId` TEXT NOT NULL, `ordersId` TEXT NOT NULL, `ordersSku` TEXT NOT NULL, `productsId` TEXT NOT NULL, `productsSku` TEXT NOT NULL, `barcode` TEXT NOT NULL, `referencia` TEXT NOT NULL, `productsName` TEXT NOT NULL, `productsQuantity` TEXT NOT NULL, `image` TEXT NOT NULL, `picking` TEXT NOT NULL, `location` TEXT NOT NULL, `locationId` TEXT NOT NULL, `quantityProcessed` TEXT NOT NULL, `serieLote` TEXT NOT NULL, `udsPack` TEXT NOT NULL, `udsBox` TEXT NOT NULL, `pickingCode` TEXT NOT NULL, PRIMARY KEY (`ordersProductsId`))');
   // });
-  final database = await $FloorAppDatabase.databaseBuilder('app_database.db').build(); //addMigrations([migration1to2]).build();
+  final migration3to4 = Migration(3, 4, (database) async {
+    database.execute('DROP TABLE IF EXISTS ProductsLocationEntity');
+    await database.execute('DROP TABLE IF EXISTS Product');
+  });
+  final migrationCreateTable = Migration(3, 4, (database) async {
+    await database.execute(
+            'CREATE TABLE IF NOT EXISTS `Product` (`ordersProductsId` TEXT NOT NULL, `ordersId` TEXT NOT NULL, `ordersSku` TEXT NOT NULL, `productsId` TEXT NOT NULL, `productsSku` TEXT NOT NULL, `barcode` TEXT NOT NULL, `referencia` TEXT NOT NULL, `productsName` TEXT NOT NULL, `productsQuantity` TEXT NOT NULL, `image` TEXT NOT NULL, `picking` TEXT NOT NULL, `location` TEXT NOT NULL, `locationId` TEXT NOT NULL, `quantityProcessed` TEXT NOT NULL, `serieLote` TEXT NOT NULL, `udsPack` TEXT NOT NULL, `udsBox` TEXT NOT NULL, `pickingCode` TEXT NOT NULL, `stock` TEXT NOT NULL, PRIMARY KEY (`ordersProductsId`))');
+    await database.execute(
+            'CREATE TABLE IF NOT EXISTS `ProductsLocationEntity` (`locationsProductsId` INTEGER NOT NULL, `produtsId` INTEGER NOT NULL, `productsSku` TEXT NOT NULL, `quantity` INTEGER NOT NULL, `quantityProcessed` INTEGER NOT NULL, `cajasId` INTEGER NOT NULL, `productsName` TEXT NOT NULL, `productsQuantity` INTEGER NOT NULL, `located` INTEGER NOT NULL, `locationsFavorite` INTEGER NOT NULL, `reference` TEXT NOT NULL, `locationsId` INTEGER NOT NULL, `newLocationId` INTEGER NOT NULL, `location` TEXT NOT NULL, `cajasAlias` INTEGER NOT NULL, `cajasName` TEXT NOT NULL, `quantityMax` INTEGER NOT NULL, `image` TEXT NOT NULL, `udsPack` INTEGER NOT NULL, `udsBox` INTEGER NOT NULL, PRIMARY KEY (`locationsProductsId`))');
+  });
+  final database = await $FloorAppDatabase
+    .databaseBuilder('app_database.db')
+    .addMigrations([migration3to4, migrationCreateTable])
+    .build(); //addMigrations([migration1to2]).build();
 
   //print(await $FloorAppDatabase.sowPath());
   di.registerSingleton<AppDatabase>(database);

@@ -62,13 +62,13 @@ class ProductRepositoryImpl implements ProductRepository {
   }
 
   @override
-  Future<bool> updateQuantityProcessed(int ordersProductsId, int quantityProcessed) async {
+  Future<bool?> updateQuantityProcessed(int ordersProductsId, int quantityProcessed) async {
     // implement updateQuentityProcessed
     return _appDatabase.productDao.updateQuantityProcessed(ordersProductsId, quantityProcessed);
   }
 
   @override
-  Future<bool> updateProductsQuantity(int ordersProductsId, int productsQuantity) async {
+  Future<bool?> updateProductsQuantity(int ordersProductsId, int productsQuantity) async {
     // implement updateQuentityProcessed
     return _appDatabase.productDao.updateProductsQuantity(ordersProductsId, productsQuantity);
   }
@@ -88,6 +88,12 @@ class ProductRepositoryImpl implements ProductRepository {
 
   @override
   Future<int?> findOrdersProductsProcesed(int ordersId) async {
-    return await _appDatabase.productDao.findOrdersProductsProcesed(ordersId);
+    try{
+       return await _appDatabase.productDao.findOrdersProductsProcesed(ordersId);
+    }catch (e) {
+      print("Error: $e");
+      return 0;
+    }
+    //eturn await _appDatabase.productDao.findOrdersProductsProcesed(ordersId);
   }
 }

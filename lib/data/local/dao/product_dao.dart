@@ -16,10 +16,10 @@ abstract class ProductDao {
   Future<void> insertProduct(Product product);
 
   @Query("UPDATE Product SET quantityProcessed = :quantityProcessed WHERE ordersProductsId = :ordersProductsId")
-  Future<bool> updateQuantityProcessed(int ordersProductsId, int quantityProcessed);
+  Future<bool?> updateQuantityProcessed(int ordersProductsId, int quantityProcessed);
 
   @Query("UPDATE Product SET productsQuantity = :productsQuantity WHERE ordersProductsId = :ordersProductsId")
-  Future<bool> updateProductsQuantity(int ordersProductsId, int productsQuantity);
+  Future<bool?> updateProductsQuantity(int ordersProductsId, int productsQuantity);
 
 
   @Query("UPDATE Product SET picking = :picking WHERE ordersProductsId = :ordersProductsId")

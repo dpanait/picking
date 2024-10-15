@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:floor/floor.dart';
+import 'package:path/path.dart';
 import 'package:piking/data/local/dao/products_location_dao.dart';
 import 'package:piking/data/local/entity/product_entity.dart';
 import 'package:piking/domain/entity/products_location_entity.dart';
@@ -14,9 +15,34 @@ abstract class AppDatabase extends FloorDatabase {
   ProductDao get productDao;
   ProductsLocationDao get productsLocationDao;
 
-  static databaseBuilder(String s) {}
-}
+  //static databaseBuilder(String s) {}
+  static Future<AppDatabase> databaseBuilder(String dbName) async {
+    return await $FloorAppDatabase
+        .databaseBuilder(dbName)
+        .addMigrations([migration1to2, migration2to3, migration3to4])  // Si tienes migraciones
+        .build();
+  }
+  // static Future<AppDatabase> databaseBuilder(String dbName) async {
+  //   final databasePath = await sqflite.getDatabasesPath();
+  //   final path = join(databasePath, dbName);
 
+
+  //   return await $FloorAppDatabase.databaseBuilder(path).build();
+  // }
+}
+// Migraciones (solo si cambias el esquema)
+final migration1to2 = Migration(1, 2, (database) async {
+  await database.execute('ALTER TABLE Product ADD COLUMN newColumn TEXT');
+});
+
+final migration2to3 = Migration(2, 3, (database) async {
+  await database.execute('ALTER TABLE ProductsLocationEntity ADD COLUMN anotherColumn TEXT');
+});
+
+final migration3to4 = Migration(3, 4, (database) async {
+  database.execute('DELETE TABLE ProductsLocationEntity');
+  await database.execute('DELETE TABLE Product');
+});
 
   // final migration1to2 = Migration(1, 2, (database) async {
   //   await database.execute(

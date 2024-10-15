@@ -51,7 +51,7 @@ class _StockMovePageState extends State<StockMovePage> {
   }
 
   Widget _startPage(BuildContext context) {
-     FocusScope.of(context).requestFocus(_focusNode);
+    FocusScope.of(context).requestFocus(_focusNode);
     return Consumer<ProductsLocationProvider>(
       builder: (context, productsLocationProvider, child) {
         //log("productsLocationProvider.showPopup: ${productsLocationProvider.showPopup}");
